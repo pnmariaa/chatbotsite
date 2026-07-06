@@ -120,6 +120,19 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
     .cb-msg.bot{ background: ${CONFIG.colors.panelBgDim}; align-self:flex-start; border-bottom-left-radius:2px; }
     .cb-msg.user{ background: ${CONFIG.colors.userBubble}; color: ${CONFIG.colors.userText}; align-self:flex-end; border-bottom-right-radius:2px; }
 
+    .cb-typing{ display:flex; align-items:center; gap:4px; padding: 12px 14px; }
+    .cb-typing span{
+      width:6px; height:6px; border-radius:50%;
+      background:#8a7f64; opacity:0.4;
+      animation: cb-blink 1.2s infinite ease-in-out;
+    }
+    .cb-typing span:nth-child(2){ animation-delay: 0.2s; }
+    .cb-typing span:nth-child(3){ animation-delay: 0.4s; }
+    @keyframes cb-blink{
+      0%, 80%, 100% { opacity:0.3; transform: translateY(0); }
+      40% { opacity:1; transform: translateY(-3px); }
+    }
+
     .cb-quick-replies{ display:flex; flex-direction:column; gap:6px; margin-top:2px; }
     .cb-quick-replies button{
       text-align:left; background:#fff; border:1px solid #cabf9e; border-radius:6px;
@@ -149,6 +162,7 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
 
     @media (prefers-reduced-motion: reduce){
       #cb-panel, #cb-toggle{ transition: none !important; }
+      .cb-typing span{ animation: none !important; opacity: 0.6; }
     }
   `;
   document.head.appendChild(style);
@@ -195,8 +209,7 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
     if (isOpen && !started) {
       started = true;
       chatBody.innerHTML = "";
-      addBotMessage(CONFIG.greeting);
-      showMainMenu();
+      botSay(CONFIG.greeting, showMainMenu);
     }
   });
 
@@ -214,6 +227,33 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
     div.textContent = text;
     chatBody.appendChild(div);
     scrollChat();
+  }
+
+  function showTyping() {
+    const div = document.createElement("div");
+    div.className = "cb-msg bot cb-typing";
+    div.id = "cb-typing-indicator";
+    div.innerHTML = "<span></span><span></span><span></span>";
+    chatBody.appendChild(div);
+    scrollChat();
+  }
+
+  function hideTyping() {
+    const el = document.getElementById("cb-typing-indicator");
+    if (el) el.remove();
+  }
+
+  // Mostra o balão "digitando..." por um instante e só depois exibe a mensagem.
+  // callback (opcional) roda depois que a mensagem aparece — usado pra
+  // encadear as próximas ações (mostrar menu, botões, etc.) na ordem certa.
+  function botSay(text, callback) {
+    showTyping();
+    const delay = 600 + Math.random() * 500; // varia entre ~0.6s e 1.1s
+    setTimeout(() => {
+      hideTyping();
+      addBotMessage(text);
+      if (callback) callback();
+    }, delay);
   }
 
   function scrollChat() {
@@ -252,12 +292,13 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
     );
 
     if (matched) {
-      addBotMessage(matched.reply);
-      if (matched.action === "scrollToCatalog") scrollToCatalog();
+      botSay(matched.reply, () => {
+        if (matched.action === "scrollToCatalog") scrollToCatalog();
+        showEndOrMenuButtons();
+      });
     } else {
-      addBotMessage(CONFIG.fallbackReply);
+      botSay(CONFIG.fallbackReply, showEndOrMenuButtons);
     }
-    showEndOrMenuButtons();
   }
 
   // Depois de cada resposta: só dois botões, em vez do menu inteiro de novo
@@ -291,14 +332,16 @@ Espero ter conseguido te ajudar! Se precisar de mais algo, estarei disposta a te
 
   function endConversation() {
     clearQuickReplies();
-    addBotMessage(CONFIG.endMessage);
-    // fecha o painel depois de um instante e reinicia a saudação pra próxima vez
-    setTimeout(() => {
-      panel.classList.remove("open");
-      toggle.classList.remove("is-open");
-      toggle.setAttribute("aria-expanded", "false");
-      started = false;
-    }, 1200);
+    botSay(CONFIG.endMessage, () => {
+      // fecha o painel, apaga o histórico e reinicia a saudação pra próxima vez
+      setTimeout(() => {
+        panel.classList.remove("open");
+        toggle.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        chatBody.innerHTML = ""; // apaga a conversa aqui mesmo, não só na reabertura
+        started = false;
+      }, 1200);
+    });
   }
 
   function scrollToCatalog() {
